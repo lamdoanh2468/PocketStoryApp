@@ -6,12 +6,57 @@ import 'package:provider/provider.dart';
 
 import '../../models/money_entry.dart';
 import '../../services/finance_repository.dart';
+import '../../services/storage_service.dart';
 import '../../utils/money_formatter.dart';
+import '../entry/add_entry_screen.dart';
 
 class DiaryScreen extends StatelessWidget {
   const DiaryScreen({super.key, required this.user});
 
   final User user;
+
+  Future<void> _openEditScreen(BuildContext context, MoneyEntry entry) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Sửa giao dịch')),
+          body: AddEntryScreen(user: user, initialEntry: entry),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteEntry(BuildContext context, MoneyEntry entry) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xóa giao dịch?'),
+        content: const Text('Giao dịch và hình ảnh liên quan sẽ bị xóa. Bạn có chắc muốn tiếp tục?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Xóa'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await StorageService().deleteEntryImage(entry.imagePath);
+      await context.read<FinanceRepository>().deleteEntry(user.uid, entry);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã xóa giao dịch.')));
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Xóa thất bại: $error')));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -72,6 +117,21 @@ class DiaryScreen extends StatelessWidget {
                             Text(
                               MoneyFormatter.vnd(entry.amount),
                               style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(width: 4),
+                            PopupMenuButton<String>(
+                              onSelected: (value) {
+                                if (value == 'edit') {
+                                  _openEditScreen(context, entry);
+                                }
+                                if (value == 'delete') {
+                                  _deleteEntry(context, entry);
+                                }
+                              },
+                              itemBuilder: (context) => const [
+                                PopupMenuItem(value: 'edit', child: Text('Sửa giao dịch')),
+                                PopupMenuItem(value: 'delete', child: Text('Xóa giao dịch')),
+                              ],
                             ),
                           ],
                         ),
