@@ -1,11 +1,11 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
-import 'package:flutter/services.dart';
 
 import '../../constants/app_categories.dart';
 import '../../models/money_entry.dart';
@@ -13,9 +13,10 @@ import '../../services/finance_repository.dart';
 import '../../services/storage_service.dart';
 
 class AddEntryScreen extends StatefulWidget {
-  const AddEntryScreen({super.key, required this.user});
+  const AddEntryScreen({super.key, required this.user, this.initialEntry});
 
   final User user;
+  final MoneyEntry? initialEntry;
 
   @override
   State<AddEntryScreen> createState() => _AddEntryScreenState();
@@ -32,7 +33,23 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
   String _category = AppCategories.expense.first;
   DateTime _happenedAt = DateTime.now();
   File? _image;
+  bool _removeExistingImage = false;
   bool _saving = false;
+
+  bool get _isEditing => widget.initialEntry != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final entry = widget.initialEntry;
+    if (entry == null) return;
+
+    _type = entry.type;
+    _category = entry.category;
+    _happenedAt = entry.happenedAt;
+    _amountController.text = entry.amount.toStringAsFixed(entry.amount.truncateToDouble() == entry.amount ? 0 : 2);
+    _noteController.text = entry.note;
+  }
 
   @override
   void dispose() {
@@ -43,14 +60,13 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
 
   List<String> get _categories => _type == EntryType.expense ? AppCategories.expense : AppCategories.income;
 
-  double _parseAmount() {
-    final rawAmount = _amountController.text.replaceAll(RegExp(r'[^0-9]'), '');
-    return double.tryParse(rawAmount) ?? 0;
-  }
   Future<void> _pickImage(ImageSource source) async {
     final image = await _picker.pickImage(source: source, imageQuality: 80, maxWidth: 1600);
     if (image == null) return;
-    setState(() => _image = File(image.path));
+    setState(() {
+      _image = File(image.path);
+      _removeExistingImage = false;
+    });
   }
 
   Future<void> _pickDate() async {
@@ -83,11 +99,19 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
     setState(() => _saving = true);
 
     try {
-      final id = const Uuid().v4();
-      String? imageUrl;
-      String? imagePath;
+      final existing = widget.initialEntry;
+      final id = existing?.id ?? const Uuid().v4();
+      String? imageUrl = existing?.imageUrl;
+      String? imagePath = existing?.imagePath;
+
+      if (_type == EntryType.income || _removeExistingImage) {
+        await _storage.deleteEntryImage(existing?.imagePath);
+        imageUrl = null;
+        imagePath = null;
+      }
 
       if (_type == EntryType.expense && _image != null) {
+        await _storage.deleteEntryImage(existing?.imagePath);
         final result = await _storage.uploadEntryImage(
           uid: widget.user.uid,
           entryId: id,
@@ -101,22 +125,30 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
         id: id,
         uid: widget.user.uid,
         type: _type,
-        amount: _parseAmount(),
+        amount: double.parse(_amountController.text.replaceAll(',', '').trim()),
         category: _category,
         note: _noteController.text.trim(),
         imageUrl: imageUrl,
         imagePath: imagePath,
         happenedAt: _happenedAt,
-        createdAt: DateTime.now(),
+        createdAt: existing?.createdAt ?? DateTime.now(),
+        updatedAt: DateTime.now(),
       );
 
       await context.read<FinanceRepository>().upsertEntry(widget.user.uid, entry);
 
       if (!mounted) return;
+      if (_isEditing) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã cập nhật giao dịch.')));
+        return;
+      }
+
       _amountController.clear();
       _noteController.clear();
       setState(() {
         _image = null;
+        _removeExistingImage = false;
         _happenedAt = DateTime.now();
       });
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã lưu giao dịch.')));
@@ -130,10 +162,20 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final existingImageUrl = widget.initialEntry?.imageUrl;
+    final shouldShowExistingImage = _type == EntryType.expense &&
+        !_removeExistingImage &&
+        _image == null &&
+        existingImageUrl != null &&
+        existingImageUrl.isNotEmpty;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('Ghi nhận giao dịch', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+        Text(
+          _isEditing ? 'Sửa giao dịch' : 'Ghi nhận giao dịch',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 16),
         SegmentedButton<EntryType>(
           segments: const [
@@ -145,8 +187,11 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
             final selected = value.first;
             setState(() {
               _type = selected;
-              _category = _categories.first;
-              if (_type == EntryType.income) _image = null;
+              _category = _categories.contains(_category) ? _category : _categories.first;
+              if (_type == EntryType.income) {
+                _image = null;
+                _removeExistingImage = true;
+              }
             });
           },
         ),
@@ -155,29 +200,16 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
           key: _formKey,
           child: Column(
             children: [
-            TextFormField(
-            controller: _amountController,
-            keyboardType: TextInputType.number,
-            inputFormatters: [
-              FilteringTextInputFormatter.digitsOnly,
-              VndInputFormatter(),
-            ],
-            decoration: const InputDecoration(
-              labelText: 'Số tiền',
-              hintText: '0',
-              suffixText: 'VNĐ',
-            ),
-            validator: (value) {
-              final rawAmount = value?.replaceAll(RegExp(r'[^0-9]'), '') ?? '';
-              final amount = double.tryParse(rawAmount);
-
-              if (amount == null || amount <= 0) {
-                return 'Nhập số tiền hợp lệ';
-              }
-
-              return null;
-            },
-          ),
+              TextFormField(
+                controller: _amountController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Số tiền'),
+                validator: (value) {
+                  final amount = double.tryParse(value?.replaceAll(',', '').trim() ?? '');
+                  if (amount == null || amount <= 0) return 'Nhập số tiền hợp lệ';
+                  return null;
+                },
+              ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 value: _category,
@@ -219,7 +251,32 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(16),
                       child: Image.file(_image!, height: 180, fit: BoxFit.cover),
+                    )
+                  else if (shouldShowExistingImage)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: CachedNetworkImage(
+                        imageUrl: existingImageUrl,
+                        height: 180,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => const Center(child: CircularProgressIndicator()),
+                        errorWidget: (_, __, ___) => const Center(child: Icon(Icons.broken_image_rounded)),
+                      ),
                     ),
+                  if (_image != null || shouldShowExistingImage) ...[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () => setState(() {
+                          _image = null;
+                          _removeExistingImage = true;
+                        }),
+                        icon: const Icon(Icons.delete_outline_rounded),
+                        label: const Text('Gỡ ảnh'),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Row(
                     children: [
@@ -249,49 +306,9 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
         FilledButton.icon(
           onPressed: _saving ? null : _save,
           icon: _saving ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.save_rounded),
-          label: const Text('Lưu giao dịch'),
+          label: Text(_isEditing ? 'Cập nhật giao dịch' : 'Lưu giao dịch'),
         ),
       ],
     );
-  }
-}
-class VndInputFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-      TextEditingValue oldValue,
-      TextEditingValue newValue,
-      ) {
-    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
-
-    if (digits.isEmpty) {
-      return const TextEditingValue(
-        text: '',
-        selection: TextSelection.collapsed(offset: 0),
-      );
-    }
-
-    final formatted = _formatVnd(digits);
-
-    return TextEditingValue(
-      text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
-    );
-  }
-
-  String _formatVnd(String digits) {
-    final buffer = StringBuffer();
-    int count = 0;
-
-    for (int i = digits.length - 1; i >= 0; i--) {
-      buffer.write(digits[i]);
-      count++;
-
-      if (count == 3 && i != 0) {
-        buffer.write('.');
-        count = 0;
-      }
-    }
-
-    return buffer.toString().split('').reversed.join();
   }
 }
