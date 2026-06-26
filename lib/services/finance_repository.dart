@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../models/app_alert.dart';
 import '../models/budget.dart';
 import '../models/money_entry.dart';
 
@@ -15,6 +16,10 @@ class FinanceRepository {
 
   CollectionReference<Map<String, dynamic>> _budgetsRef(String uid) {
     return _firestore.collection('users').doc(uid).collection('budgets');
+  }
+
+  CollectionReference<Map<String, dynamic>> _alertsRef(String uid) {
+    return _firestore.collection('users').doc(uid).collection('alerts');
   }
 
   Stream<List<MoneyEntry>> watchEntries(String uid) {
@@ -59,5 +64,23 @@ class FinanceRepository {
 
   Future<void> deleteBudget(String uid, String budgetId) async {
     await _budgetsRef(uid).doc(budgetId).delete();
+  }
+
+  Stream<List<AppAlert>> watchAlerts(String uid) {
+    return _alertsRef(uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map(AppAlert.fromDoc).toList());
+  }
+
+  Future<void> markAlertAsRead(String uid, String alertId) async {
+    await _alertsRef(uid).doc(alertId).set({
+      'read': true,
+      'readAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> deleteAlert(String uid, String alertId) async {
+    await _alertsRef(uid).doc(alertId).delete();
   }
 }
