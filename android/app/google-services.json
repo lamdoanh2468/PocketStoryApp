@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "666747090716",
+    "project_id": "pocketstory-6d696",
+    "storage_bucket": "pocketstory-6d696.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:666747090716:android:c9b07d23bd81f9e5af6cd9",
+        "android_client_info": {
+          "package_name": "com.example.pocketstory"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyANH4VmFtlLCXMkD-Bazio9BNzp2Qe54TI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
