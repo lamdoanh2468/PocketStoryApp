@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
@@ -47,7 +48,7 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
     _type = entry.type;
     _category = entry.category;
     _happenedAt = entry.happenedAt;
-    _amountController.text = entry.amount.toStringAsFixed(entry.amount.truncateToDouble() == entry.amount ? 0 : 2);
+    _amountController.text = _VndAmountInputFormatter.formatAmount(entry.amount);
     _noteController.text = entry.note;
   }
 
@@ -94,6 +95,12 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
     });
   }
 
+  double? _parseAmount(String value) {
+    final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return null;
+    return double.tryParse(digits);
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
@@ -121,11 +128,16 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
         imagePath = result.path;
       }
 
+      final amount = _parseAmount(_amountController.text);
+      if (amount == null || amount <= 0) {
+        throw StateError('Số tiền không hợp lệ');
+      }
+
       final entry = MoneyEntry(
         id: id,
         uid: widget.user.uid,
         type: _type,
-        amount: double.parse(_amountController.text.replaceAll(',', '').trim()),
+        amount: amount,
         category: _category,
         note: _noteController.text.trim(),
         imageUrl: imageUrl,
@@ -203,10 +215,18 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
               TextFormField(
                 controller: _amountController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Số tiền'),
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  _VndAmountInputFormatter(),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Số tiền',
+                  hintText: 'VD: 50.000',
+                  suffixText: 'VND',
+                ),
                 validator: (value) {
-                  final amount = double.tryParse(value?.replaceAll(',', '').trim() ?? '');
-                  if (amount == null || amount <= 0) return 'Nhập số tiền hợp lệ';
+                  final amount = _parseAmount(value ?? '');
+                  if (amount == null || amount <= 0) return 'Nhập số tiền hợp lệ, ví dụ 50.000 VND';
                   return null;
                 },
               ),
@@ -310,5 +330,45 @@ class _AddEntryScreenState extends State<AddEntryScreen> {
         ),
       ],
     );
+  }
+}
+
+class _VndAmountInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) {
+      return const TextEditingValue(
+        text: '',
+        selection: TextSelection.collapsed(offset: 0),
+      );
+    }
+
+    final normalizedDigits = digits.replaceFirst(RegExp(r'^0+(?=\d)'), '');
+    final formatted = _formatDigits(normalizedDigits);
+
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+
+  static String formatAmount(num amount) {
+    return _formatDigits(amount.round().toString());
+  }
+
+  static String _formatDigits(String digits) {
+    final buffer = StringBuffer();
+
+    for (var i = 0; i < digits.length; i++) {
+      final positionFromEnd = digits.length - i;
+      buffer.write(digits[i]);
+
+      if (positionFromEnd > 1 && positionFromEnd % 3 == 1) {
+        buffer.write('.');
+      }
+    }
+
+    return buffer.toString();
   }
 }
