@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
+import 'alerts/alerts_screen.dart';
 import 'budget/budget_screen.dart';
 import 'dashboard/dashboard_screen.dart';
 import 'diary/diary_screen.dart';
@@ -42,6 +43,20 @@ class _MainShellState extends State<MainShell> {
       appBar: AppBar(
         title: const Text('PocketStory'),
         actions: [
+          IconButton(
+            tooltip: 'Thông báo',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(title: const Text('Thông báo & cảnh báo')),
+                    body: AlertsScreen(user: widget.user),
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.notifications_rounded),
+          ),
           IconButton(
             tooltip: 'Đăng xuất',
             onPressed: () => context.read<AuthService>().signOut(),
