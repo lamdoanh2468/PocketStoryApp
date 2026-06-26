@@ -60,4 +60,13 @@ class StorageService {
       path: imagePath ?? 'pocketstory/users/$uid/entries/$entryId',
     );
   }
+
+  Future<void> deleteEntryImage(String? path) async {
+    if (path == null || path.isEmpty) return;
+
+    // Project đang dùng unsigned upload preset của Cloudinary. Xóa ảnh trực tiếp
+    // từ client cần API secret nên không nên đặt trong app Flutter. Hiện tại
+    // hàm này đóng vai trò điểm mở rộng để sau này chuyển việc xóa ảnh sang
+    // Cloud Functions hoặc backend riêng.
+  }
 }
