@@ -6,6 +6,12 @@
 *.swp
 .buildlog/
 .history
+.env
+.env.*
+!.env.example
+node_modules/
+service-account*.json
+firebase-adminsdk*.json
 
 
 
@@ -21,7 +27,6 @@
 /dev/docs/doc/
 /dev/docs/flutter.docs.zip
 /dev/docs/lib/
-/dev/docs/pubspec.yaml
 /dev/integration_tests/**/xcuserdata
 /dev/integration_tests/**/Pods
 /packages/flutter/coverage/
