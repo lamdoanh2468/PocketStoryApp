@@ -222,7 +222,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                 ),
                 const SizedBox(width: 8),
                 FilledButton.icon(
-                  onPressed: _isLoading ? null : _sendQuestion,
+                  onPressed: _isLoading ? null : () => _sendQuestion(),
                   icon: const Icon(Icons.send_rounded),
                   label: const Text('Gửi'),
                 ),
