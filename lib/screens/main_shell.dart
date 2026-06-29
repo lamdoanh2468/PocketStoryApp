@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../services/notification_service.dart';
 import 'alerts/alerts_screen.dart';
 import 'budget/budget_screen.dart';
+import 'chatbot/chatbot_screen.dart';
 import 'dashboard/dashboard_screen.dart';
 import 'diary/diary_screen.dart';
 import 'entry/add_entry_screen.dart';
@@ -29,6 +30,7 @@ class _MainShellState extends State<MainShell> {
     AddEntryScreen(user: widget.user),
     BudgetScreen(user: widget.user),
     ReportScreen(user: widget.user),
+    ChatbotScreen(user: widget.user),
   ];
 
   @override
@@ -67,6 +69,7 @@ class _MainShellState extends State<MainShell> {
       body: IndexedStack(index: _index, children: _pages),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
+        type: BottomNavigationBarType.fixed,
         onTap: (value) => setState(() => _index = value),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Tổng quan'),
@@ -74,6 +77,7 @@ class _MainShellState extends State<MainShell> {
           BottomNavigationBarItem(icon: Icon(Icons.add_circle_rounded), label: 'Thêm'),
           BottomNavigationBarItem(icon: Icon(Icons.savings_rounded), label: 'Ngân sách'),
           BottomNavigationBarItem(icon: Icon(Icons.bar_chart_rounded), label: 'Báo cáo'),
+          BottomNavigationBarItem(icon: Icon(Icons.smart_toy_rounded), label: 'AI'),
         ],
       ),
     );
