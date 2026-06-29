@@ -12,6 +12,7 @@
 node_modules/
 service-account*.json
 firebase-adminsdk*.json
+*firebase-adminsdk*.json
 
 
 
