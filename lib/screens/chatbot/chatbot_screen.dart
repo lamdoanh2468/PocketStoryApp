@@ -71,7 +71,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
         _messages.add(
           _ChatMessage(
             text:
-                'Mình chưa phân tích được lúc này. Bạn kiểm tra lại kết nối mạng, đăng nhập Firebase và Cloud Function analyzePersonalSpending nhé.\n\nChi tiết lỗi: $error',
+                'Mình chưa phân tích được lúc này. Bạn kiểm tra lại backend PocketStory API, kết nối mạng và trạng thái đăng nhập Firebase nhé.\n\nChi tiết lỗi: $error',
             isUser: false,
           ),
         );

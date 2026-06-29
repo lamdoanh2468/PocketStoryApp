@@ -1,4 +1,7 @@
-import 'package:cloud_functions/cloud_functions.dart';
+import 'dart:convert';
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 
 class ChatbotAnalysis {
   const ChatbotAnalysis({
@@ -27,21 +30,58 @@ class ChatbotAnalysis {
 }
 
 class ChatbotService {
-  ChatbotService({FirebaseFunctions? functions})
-      : _functions = functions ?? FirebaseFunctions.instance;
+  ChatbotService({
+    FirebaseAuth? auth,
+    http.Client? client,
+    String? baseUrl,
+  })  : _auth = auth ?? FirebaseAuth.instance,
+        _client = client ?? http.Client(),
+        _baseUrl = (baseUrl ?? _configuredBaseUrl).replaceFirst(RegExp(r'/$'), '');
 
-  final FirebaseFunctions _functions;
+  static const String _configuredBaseUrl = String.fromEnvironment(
+    'POCKETSTORY_API_BASE_URL',
+    defaultValue: 'http://10.0.2.2:3000',
+  );
+
+  final FirebaseAuth _auth;
+  final http.Client _client;
+  final String _baseUrl;
 
   Future<ChatbotAnalysis> analyzePersonalSpending({
     required String question,
     required int rangeDays,
   }) async {
-    final callable = _functions.httpsCallable('analyzePersonalSpending');
-    final result = await callable.call<Map<String, dynamic>>({
-      'question': question,
-      'rangeDays': rangeDays,
-    });
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError('Bạn cần đăng nhập để dùng chatbot phân tích chi tiêu.');
+    }
 
-    return ChatbotAnalysis.fromJson(Map<String, dynamic>.from(result.data));
+    final idToken = await user.getIdToken();
+    if (idToken == null || idToken.isEmpty) {
+      throw StateError('Không lấy được Firebase ID token của người dùng hiện tại.');
+    }
+
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/api/chatbot/analyze'),
+      headers: {
+        'Authorization': 'Bearer $idToken',
+        'Content-Type': 'application/json; charset=utf-8',
+      },
+      body: jsonEncode({
+        'question': question,
+        'rangeDays': rangeDays,
+      }),
+    );
+
+    final decodedBody = jsonDecode(utf8.decode(response.bodyBytes));
+    final json = decodedBody is Map<String, dynamic>
+        ? decodedBody
+        : Map<String, dynamic>.from(decodedBody as Map);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError(json['message']?.toString() ?? 'Chatbot API request failed.');
+    }
+
+    return ChatbotAnalysis.fromJson(json);
   }
 }
