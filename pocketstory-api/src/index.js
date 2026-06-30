@@ -15,8 +15,8 @@ const config = {
   port: Number(process.env.PORT || 3000),
   allowedOrigin: process.env.CORS_ORIGIN || '*',
   firebaseProjectId: process.env.FIREBASE_PROJECT_ID || 'pocketstory-6d696',
-  openAiApiKey: process.env.OPENAI_API_KEY || '',
-  openAiModel: process.env.OPENAI_MODEL || 'gpt-4.1-mini',
+  geminiApiKey: process.env.GEMINI_API_KEY || '',
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
 };
 
 function createFirebaseCredential() {
@@ -212,64 +212,78 @@ function buildPrompt({ question, rangeDays, entriesSummary, budgetsSummary }) {
   });
 }
 
-function extractOpenAiText(payload) {
-  if (typeof payload.output_text === 'string' && payload.output_text.trim()) {
-    return payload.output_text.trim();
-  }
+function getGeminiModelPath(model) {
+  return model.startsWith('models/') ? model : `models/${model}`;
+}
 
-  const output = Array.isArray(payload.output) ? payload.output : [];
+function extractGeminiText(payload) {
+  const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
   const text = [];
 
-  for (const item of output) {
-    const content = Array.isArray(item.content) ? item.content : [];
-    for (const block of content) {
-      if (typeof block.text === 'string') {
-        text.push(block.text);
+  for (const candidate of candidates) {
+    const parts = Array.isArray(candidate?.content?.parts)
+      ? candidate.content.parts
+      : [];
+
+    for (const part of parts) {
+      if (typeof part.text === 'string' && part.text.trim()) {
+        text.push(part.text.trim());
       }
     }
   }
 
-  return text.join('\n').trim();
-}
+  const answer = text.join('\n').trim();
+  if (answer) return answer;
 
-async function callOpenAi(prompt) {
-  if (!config.openAiApiKey) {
-    throw new Error('OPENAI_API_KEY is not configured.');
+  const reason = candidates[0]?.finishReason || payload.promptFeedback?.blockReason;
+  if (reason) {
+    throw new Error(`Gemini response has no text. Reason: ${reason}`);
   }
 
-  const response = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${config.openAiApiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: config.openAiModel,
-      input: [
-        {
-          role: 'system',
-          content: [
+  return '';
+}
+
+async function callGemini(prompt) {
+  if (!config.geminiApiKey) {
+    throw new Error('GEMINI_API_KEY is not configured.');
+  }
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/${getGeminiModelPath(config.geminiModel)}:generateContent`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': config.geminiApiKey,
+      },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [
             {
-              type: 'input_text',
               text: 'Bạn là chatbot phân tích chi tiêu cá nhân cho ứng dụng PocketStory. Trả lời bằng tiếng Việt, rõ ràng, an toàn và không bịa số liệu.',
             },
           ],
         },
-        {
-          role: 'user',
-          content: [{ type: 'input_text', text: prompt }],
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.4,
+          maxOutputTokens: 900,
         },
-      ],
-      max_output_tokens: 900,
-    }),
-  });
+      }),
+    },
+  );
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`OpenAI request failed ${response.status}: ${body}`);
+    throw new Error(`Gemini request failed ${response.status}: ${body}`);
   }
 
-  return extractOpenAiText(await response.json());
+  return extractGeminiText(await response.json());
 }
 
 function buildLocalFallback({ rangeDays, entriesSummary, budgetsSummary }) {
@@ -360,16 +374,16 @@ app.post('/api/chatbot/analyze', authenticateFirebaseUser, async (req, res) => {
     const prompt = buildPrompt({ question, rangeDays, entriesSummary, budgetsSummary });
 
     try {
-      const answer = await callOpenAi(prompt);
+      const answer = await callGemini(prompt);
       return res.json({
         answer: answer || buildLocalFallback({ rangeDays, entriesSummary, budgetsSummary }),
-        source: answer ? 'openai' : 'local_fallback_empty_ai_response',
+        source: answer ? 'gemini' : 'local_fallback_empty_ai_response',
         rangeDays,
         entriesCount: entries.length,
         budgetsCount: budgets.length,
       });
     } catch (error) {
-      console.error('OpenAI analysis failed:', error);
+      console.error('Gemini analysis failed:', error);
       return res.json({
         answer: buildLocalFallback({ rangeDays, entriesSummary, budgetsSummary }),
         source: 'local_fallback_ai_error',
