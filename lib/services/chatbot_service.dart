@@ -40,7 +40,7 @@ class ChatbotService {
 
   static const String _configuredBaseUrl = String.fromEnvironment(
     'POCKETSTORY_API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:3000',
+    defaultValue: 'https://authentication-sporting-temp-inquiry.trycloudflare.com',
   );
 
   final FirebaseAuth _auth;
