@@ -1,0 +1,22 @@
+services:
+  pocketstory-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pocketstory-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - "${APP_PORT:-3000}:3000"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: pocketstory-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - pocketstory-api
