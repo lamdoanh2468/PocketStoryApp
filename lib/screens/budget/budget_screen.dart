@@ -66,6 +66,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
 
     final repo = context.read<FinanceRepository>();
     final editingBudget = _editingBudget;
+    final wasEditing = editingBudget != null;
 
     setState(() => _saving = true);
     final now = DateTime.now();
@@ -89,7 +90,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
       if (!mounted) return;
       _clearForm();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_isEditing ? 'Đã cập nhật ngân sách.' : 'Đã lưu ngân sách.')),
+        SnackBar(content: Text(wasEditing ? 'Đã cập nhật ngân sách.' : 'Đã lưu ngân sách.')),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
