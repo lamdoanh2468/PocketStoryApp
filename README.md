@@ -1,127 +1,86 @@
 # PocketStoryApp
 
-PocketStory là ứng dụng nhật ký tài chính cá nhân thông minh được xây dựng bằng Flutter và Firebase. Ứng dụng giúp người dùng ghi nhận thu nhập, chi tiêu, ngân sách, xem thống kê tài chính cá nhân và sử dụng chatbot AI để phân tích thói quen chi tiêu.
+PocketStoryApp là ứng dụng quản lý tài chính cá nhân thông minh được xây dựng bằng Flutter, Firebase và Node.js. Ứng dụng giúp người dùng ghi lại thu nhập, khoản chi, ngân sách, xem báo cáo trực quan và hỏi chatbot AI để phân tích thói quen chi tiêu.
 
-Repo này gồm 2 phần chính:
+Backend chatbot có thể chạy trên Ubuntu Server bằng Docker Compose và được public qua Cloudflare Tunnel tại domain dạng:
 
-- Ứng dụng Flutter ở thư mục gốc, dùng cho mobile app.
-- Backend Node.js ở thư mục `pocketstory-api/`, dùng cho chatbot phân tích chi tiêu bằng AI.
+```txt
+https://chat.pocketstoryapp.io.vn
+```
 
 ---
 
-## 1. Chức năng chính
+## Mục lục
 
-### 1.1. Xác thực người dùng
+- [1. Tổng quan hệ thống](#1-tổng-quan-hệ-thống)
+- [2. Công nghệ sử dụng](#2-công-nghệ-sử-dụng)
+- [3. Chức năng chính](#3-chức-năng-chính)
+- [4. Cấu trúc thư mục](#4-cấu-trúc-thư-mục)
+- [5. Cài đặt môi trường](#5-cài-đặt-môi-trường)
+- [6. Chạy Flutter app](#6-chạy-flutter-app)
+- [7. Chạy chatbot backend local](#7-chạy-chatbot-backend-local)
+- [8. Deploy backend bằng Ubuntu Server, Docker và Cloudflare Tunnel](#8-deploy-backend-bằng-ubuntu-server-docker-và-cloudflare-tunnel)
+- [9. Flow hoạt động](#9-flow-hoạt-động)
+- [10. Test API](#10-test-api)
+- [11. Build APK](#11-build-apk)
+- [12. Lỗi thường gặp](#12-lỗi-thường-gặp)
+- [13. Bảo mật](#13-bảo-mật)
 
-- Đăng ký và đăng nhập bằng Firebase Authentication.
-- Hỗ trợ đăng nhập bằng email/password.
-- Hỗ trợ đăng nhập Google.
-- Mỗi người dùng có dữ liệu tài chính riêng theo `uid` trong Firestore.
+---
 
-### 1.2. Quản lý thu nhập và chi tiêu
+## 1. Tổng quan hệ thống
 
-Người dùng có thể ghi nhận các giao dịch tài chính cá nhân, bao gồm:
-
-- Loại giao dịch: `income` hoặc `expense`.
-- Số tiền.
-- Danh mục.
-- Ghi chú.
-- Hình ảnh liên quan đến khoản chi.
-- Thời gian phát sinh giao dịch.
-
-Dữ liệu được lưu theo cấu trúc:
+PocketStoryApp gồm 2 phần chính:
 
 ```txt
-users/{uid}/entries/{entryId}
+Flutter mobile app
+  ├─ Firebase Authentication
+  ├─ Cloud Firestore
+  ├─ Firebase Storage
+  ├─ Firebase Messaging
+  └─ Gọi PocketStory API để dùng chatbot AI
+
+PocketStory API - Node.js backend
+  ├─ Verify Firebase ID token
+  ├─ Đọc dữ liệu entries và budgets trong Firestore
+  ├─ Tóm tắt dữ liệu tài chính
+  ├─ Gọi Gemini API
+  └─ Trả kết quả phân tích về Flutter app
 ```
 
-### 1.3. Quản lý ngân sách
-
-Người dùng có thể tạo ngân sách theo danh mục và khoảng thời gian:
-
-- Danh mục ngân sách.
-- Số tiền giới hạn.
-- Ngày bắt đầu.
-- Ngày kết thúc.
-
-Dữ liệu được lưu theo cấu trúc:
+Luồng triển khai backend:
 
 ```txt
-users/{uid}/budgets/{budgetId}
-```
-
-### 1.4. Thống kê, biểu đồ và báo cáo
-
-Ứng dụng hỗ trợ tổng hợp dữ liệu thu/chi để người dùng theo dõi tình hình tài chính cá nhân:
-
-- Tổng thu.
-- Tổng chi.
-- Số dư.
-- Danh mục chi nhiều nhất.
-- Ngày có mức chi cao.
-- So sánh chi tiêu theo khoảng thời gian.
-- Hiển thị biểu đồ bằng `fl_chart`.
-
-### 1.5. Cảnh báo ngân sách
-
-Ứng dụng có cấu trúc dữ liệu cảnh báo trong Firestore:
-
-```txt
-users/{uid}/alerts/{alertId}
-```
-
-Cảnh báo dùng để lưu các thông tin như ngân sách gần vượt, đã vượt hoặc các nhắc nhở tài chính khác.
-
-### 1.6. Chatbot AI phân tích chi tiêu
-
-Chatbot sử dụng dữ liệu `entries` và `budgets` của người dùng hiện tại để phân tích chi tiêu cá nhân.
-
-Luồng chính:
-
-```txt
-Flutter app
-  → lấy Firebase ID token của user đang đăng nhập
-  → gửi request đến PocketStory API
-  → backend verify Firebase ID token
-  → backend đọc entries và budgets trong Firestore
-  → backend tóm tắt dữ liệu
-  → backend gọi Gemini API
-  → trả kết quả phân tích về app
-```
-
-Endpoint chatbot:
-
-```txt
-POST /api/chatbot/analyze
-```
-
-Health check endpoint:
-
-```txt
-GET /health
+Internet / Flutter app
+  → https://chat.pocketstoryapp.io.vn
+  → Cloudflare Tunnel
+  → cloudflared container trên Ubuntu Server
+  → pocketstory-api container
+  → Firebase Admin SDK + Gemini API
 ```
 
 ---
 
 ## 2. Công nghệ sử dụng
 
-### 2.1. Mobile app
+### Mobile app
 
 - Flutter.
 - Dart SDK `>=3.4.0 <4.0.0`.
 - Firebase Core.
-- Firebase Auth.
+- Firebase Authentication.
 - Cloud Firestore.
 - Firebase Storage.
 - Firebase Messaging.
 - Google Sign-In.
 - Provider.
-- HTTP client.
+- HTTP.
 - Image Picker.
 - FL Chart.
 - Intl.
+- Shared Preferences.
 
-### 2.2. Backend chatbot
+### Backend chatbot
 
 Backend nằm trong thư mục:
 
@@ -140,51 +99,179 @@ Công nghệ chính:
 - Morgan.
 - Dotenv.
 
-### 2.3. Triển khai server
+### Deploy
 
 - Ubuntu Server.
 - Docker.
 - Docker Compose.
 - Cloudflare Tunnel.
-- Domain public: ví dụ `https://chat.pocketstoryapp.io.vn`.
+- Domain HTTPS qua Cloudflare.
 
 ---
 
-## 3. Cấu trúc thư mục quan trọng
+## 3. Chức năng chính
+
+### 3.1. Đăng ký và đăng nhập
+
+Ứng dụng sử dụng Firebase Authentication để xác thực người dùng.
+
+Hỗ trợ:
+
+- Đăng ký bằng email/password.
+- Đăng nhập bằng email/password.
+- Đăng nhập Google.
+- Đăng xuất.
+- Lấy Firebase ID token để gọi backend chatbot.
+
+Mỗi user có dữ liệu riêng theo `uid` trong Firestore.
+
+### 3.2. Quản lý thu nhập và chi tiêu
+
+Người dùng có thể tạo giao dịch tài chính cá nhân với các thông tin:
+
+- Loại giao dịch: `income` hoặc `expense`.
+- Số tiền.
+- Danh mục.
+- Ghi chú.
+- Hình ảnh liên quan.
+- Ngày phát sinh.
+
+Dữ liệu được lưu tại:
+
+```txt
+users/{uid}/entries/{entryId}
+```
+
+### 3.3. Quản lý ngân sách
+
+Người dùng có thể tạo và chỉnh sửa ngân sách theo danh mục.
+
+Chức năng ngân sách gồm:
+
+- Tạo ngân sách theo tháng.
+- Chỉnh sửa ngân sách đã tạo.
+- Xóa ngân sách.
+- Tự động format hạn mức theo VND khi nhập, ví dụ:
+
+```txt
+1000000 → 1.000.000 VND
+```
+
+- Hiển thị tiến độ đã dùng ngân sách bằng thanh progress.
+- Cảnh báo khi sắp chạm hoặc vượt ngân sách.
+
+Dữ liệu được lưu tại:
+
+```txt
+users/{uid}/budgets/{budgetId}
+```
+
+### 3.4. Báo cáo và biểu đồ
+
+Ứng dụng tổng hợp dữ liệu thu/chi để hiển thị báo cáo:
+
+- Tổng thu.
+- Tổng chi.
+- Số dư.
+- Chi tiêu theo danh mục.
+- Chi tiêu theo thời gian.
+- So sánh xu hướng giữa các khoảng thời gian.
+- Biểu đồ trực quan bằng `fl_chart`.
+
+### 3.5. Cảnh báo
+
+Ứng dụng có collection cảnh báo:
+
+```txt
+users/{uid}/alerts/{alertId}
+```
+
+Dùng để lưu các cảnh báo liên quan đến ngân sách hoặc tình hình chi tiêu.
+
+### 3.6. Chatbot AI phân tích chi tiêu
+
+Chatbot AI phân tích dữ liệu tài chính của user hiện tại.
+
+Endpoint chính:
+
+```txt
+POST /api/chatbot/analyze
+```
+
+Backend sẽ:
+
+- Nhận Firebase ID token từ Flutter app.
+- Verify token bằng Firebase Admin SDK.
+- Lấy `uid` từ token.
+- Đọc `entries` và `budgets` của user trong Firestore.
+- Tóm tắt dữ liệu thu/chi.
+- Gửi prompt đến Gemini API.
+- Trả câu trả lời phân tích về app.
+
+Nếu Gemini lỗi hoặc chưa cấu hình API key, backend có thể trả kết quả phân tích cục bộ ở mức cơ bản.
+
+### 3.7. Chuyển giao diện sáng/tối
+
+Ứng dụng có nút chuyển giao diện sáng/tối trên AppBar chính.
+
+- Giao diện sáng dùng `AppTheme.lightTheme`.
+- Giao diện tối dùng `AppTheme.darkTheme`.
+- Lựa chọn theme được lưu bằng `shared_preferences`.
+- Khi mở lại app, theme đã chọn trước đó sẽ được giữ lại.
+
+---
+
+## 4. Cấu trúc thư mục
 
 ```txt
 PocketStoryApp/
-├── lib/                         # Source Flutter app
-├── assets/                      # Tài nguyên giao diện
-├── docs/
-│   └── firestore_schema.md      # Mô tả cấu trúc Firestore
-├── pocketstory-api/             # Backend chatbot AI
+├── lib/
+│   ├── constants/                 # Danh mục, hằng số
+│   ├── models/                    # Model dữ liệu: Budget, MoneyEntry, Alert...
+│   ├── screens/                   # Các màn hình Flutter
+│   │   ├── auth/                  # Đăng nhập / đăng ký
+│   │   ├── budget/                # Quản lý ngân sách
+│   │   ├── chatbot/               # Chatbot AI
+│   │   ├── dashboard/             # Tổng quan
+│   │   ├── diary/                 # Nhật ký giao dịch
+│   │   ├── entry/                 # Thêm khoản thu/chi
+│   │   └── report/                # Báo cáo / biểu đồ
+│   ├── services/                  # AuthService, FinanceRepository, ChatbotService...
+│   ├── theme/                     # Theme sáng/tối
+│   └── utils/                     # Format tiền, xử lý ngày...
+│
+├── pocketstory-api/
 │   ├── src/
-│   │   └── index.js             # Entry point Express API
-│   ├── package.json
+│   │   └── index.js               # Express API chatbot
 │   ├── Dockerfile
-│   ├── .env.example
-│   └── .env                     # Không commit file này
-├── docker-compose.yml           # Chạy backend + cloudflared bằng Docker Compose
-├── pubspec.yaml                 # Cấu hình Flutter dependencies
+│   ├── package.json
+│   └── .env.example
+│
+├── docs/
+│   └── firestore_schema.md
+│
+├── docker-compose.yml
+├── pubspec.yaml
+├── firebase.json
+├── firestore.rules
+├── storage.rules
 └── README.md
 ```
 
 ---
 
-## 4. Cài đặt môi trường phát triển
+## 5. Cài đặt môi trường
 
-### 4.1. Yêu cầu chung
+### 5.1. Công cụ cần có
 
-Cài sẵn các công cụ sau:
+Cài các công cụ sau trên máy phát triển:
 
 - Git.
 - Flutter SDK.
-- Dart SDK đi kèm Flutter.
 - Android Studio hoặc VS Code.
-- Firebase CLI nếu cần cấu hình Firebase.
+- Firebase CLI nếu cần deploy rules/functions.
 - Node.js `>=20` nếu chạy backend local.
-- Docker và Docker Compose nếu deploy bằng container.
+- Docker và Docker Compose nếu deploy backend bằng container.
 
 Kiểm tra Flutter:
 
@@ -206,64 +293,58 @@ docker --version
 docker compose version
 ```
 
----
-
-## 5. Chạy Flutter app ở máy local
-
-Clone repo:
+### 5.2. Clone repo
 
 ```bash
 git clone https://github.com/lamdoanh2468/PocketStoryApp.git
 cd PocketStoryApp
 ```
 
-Cài dependencies Flutter:
+### 5.3. Cài dependencies Flutter
 
 ```bash
 flutter pub get
 ```
 
-Chạy app:
+---
+
+## 6. Chạy Flutter app
+
+Chạy app ở môi trường local:
 
 ```bash
 flutter run
 ```
 
-Nếu muốn ép app gọi backend chatbot public, chạy với `dart-define`:
+Mặc định app có thể gọi backend chatbot theo URL đã cấu hình trong code. Nếu muốn ép app gọi domain production, chạy:
 
 ```bash
 flutter run --dart-define=POCKETSTORY_API_BASE_URL=https://chat.pocketstoryapp.io.vn
 ```
 
-Khi build APK release:
+Khi build release cũng nên truyền URL backend:
 
 ```bash
 flutter build apk --release --dart-define=POCKETSTORY_API_BASE_URL=https://chat.pocketstoryapp.io.vn
 ```
 
-File APK thường nằm ở:
-
-```txt
-build/app/outputs/flutter-apk/app-release.apk
-```
-
 ---
 
-## 6. Chạy backend chatbot local
+## 7. Chạy chatbot backend local
 
-Vào thư mục backend:
+Vào thư mục API:
 
 ```bash
 cd pocketstory-api
 ```
 
-Tạo file `.env` từ file mẫu:
+Tạo file `.env`:
 
 ```bash
 cp .env.example .env
 ```
 
-Ví dụ nội dung `.env`:
+Ví dụ `.env` local:
 
 ```env
 PORT=3000
@@ -277,19 +358,19 @@ GEMINI_API_KEY=PASTE_GEMINI_API_KEY_HERE
 GEMINI_MODEL=gemini-1.5-flash
 ```
 
-Cài dependencies:
+Cài package Node.js:
 
 ```bash
 npm install
 ```
 
-Chạy backend ở chế độ development:
+Chạy API:
 
 ```bash
 npm run dev
 ```
 
-Test health check:
+Test API:
 
 ```bash
 curl http://localhost:3000/health
@@ -303,27 +384,23 @@ Kết quả đúng:
 
 ---
 
-## 7. Triển khai trên Ubuntu Server bằng Docker và Cloudflare Tunnel
+## 8. Deploy backend bằng Ubuntu Server, Docker và Cloudflare Tunnel
 
-Mục tiêu là public backend chatbot ra domain dạng:
-
-```txt
-https://chat.pocketstoryapp.io.vn
-```
-
-Luồng triển khai:
+### 8.1. Luồng deploy tổng quát
 
 ```txt
 Ubuntu Server
+  → cài Docker và Docker Compose
   → clone repo PocketStoryApp
-  → tạo file .env cần thiết
+  → tạo file .env ở root repo
+  → tạo file pocketstory-api/.env
   → copy Firebase Admin SDK JSON vào server
-  → chạy Docker Compose
-  → cloudflared tạo tunnel ra Cloudflare
-  → domain chat.pocketstoryapp.io.vn trỏ về service pocketstory-api:3000
+  → tạo Cloudflare Tunnel
+  → add route chat.pocketstoryapp.io.vn → http://pocketstory-api:3000
+  → chạy docker compose up -d --build
 ```
 
-### 7.1. Cài Docker trên Ubuntu Server
+### 8.2. Cài Docker trên Ubuntu
 
 ```bash
 sudo apt update
@@ -331,20 +408,14 @@ sudo apt install -y git docker.io docker-compose-plugin
 sudo systemctl enable --now docker
 ```
 
-Kiểm tra Docker:
-
-```bash
-sudo docker ps
-```
-
-### 7.2. Clone repo
+### 8.3. Clone repo trên server
 
 ```bash
 git clone https://github.com/lamdoanh2468/PocketStoryApp.git
 cd PocketStoryApp
 ```
 
-### 7.3. Tạo file `.env` ở root project
+### 8.4. Tạo file `.env` ở root project
 
 File này dùng cho Docker Compose và Cloudflare Tunnel.
 
@@ -359,9 +430,7 @@ APP_PORT=3000
 CLOUDFLARE_TUNNEL_TOKEN=PASTE_CLOUDFLARE_TUNNEL_TOKEN_HERE
 ```
 
-Không commit file này lên GitHub.
-
-### 7.4. Tạo file `.env` cho backend API
+### 8.5. Tạo file `.env` cho backend API
 
 ```bash
 nano pocketstory-api/.env
@@ -381,31 +450,27 @@ GEMINI_API_KEY=PASTE_GEMINI_API_KEY_HERE
 GEMINI_MODEL=gemini-1.5-flash
 ```
 
-Không commit file này lên GitHub.
+### 8.6. Copy Firebase Admin SDK JSON vào server
 
-### 7.5. Copy Firebase Admin SDK JSON vào server
-
-File Firebase Admin SDK JSON phải nằm trên Ubuntu server, ví dụ:
+Ví dụ đặt file tại:
 
 ```txt
 ~/PocketStoryApp/pocketstory-api/firebase-service-account.json
 ```
 
-Có thể copy từ Windows sang Ubuntu bằng `scp`:
+Copy từ máy local sang Ubuntu:
 
 ```bash
 scp ./pocketstory-api/firebase-service-account.json username@SERVER_IP:~/PocketStoryApp/pocketstory-api/
 ```
 
-Kiểm tra file đã có trên server:
+Kiểm tra:
 
 ```bash
 ls -la pocketstory-api/*.json
 ```
 
-Không commit file Firebase Admin SDK JSON lên GitHub.
-
-### 7.6. Cấu hình Cloudflare Tunnel route
+### 8.7. Cấu hình Cloudflare Tunnel
 
 Trong Cloudflare Zero Trust, tạo tunnel và thêm Public Hostname:
 
@@ -415,17 +480,17 @@ Domain: pocketstoryapp.io.vn
 Service: http://pocketstory-api:3000
 ```
 
-Kết quả route:
+Kết quả:
 
 ```txt
 https://chat.pocketstoryapp.io.vn → http://pocketstory-api:3000
 ```
 
-Lý do dùng `pocketstory-api:3000` là vì `cloudflared` và `pocketstory-api` chạy chung Docker Compose network, nên container `cloudflared` có thể gọi container API bằng service name.
+`pocketstory-api` là tên service/container trong Docker Compose. Vì `cloudflared` và `pocketstory-api` chạy chung Docker network, Cloudflare Tunnel có thể gọi API qua service name này.
 
-### 7.7. Docker Compose mẫu
+### 8.8. Docker Compose khuyến nghị
 
-Nếu cần deploy backend trong repo này, `docker-compose.yml` nên có dạng:
+Vì Node.js backend nằm trong thư mục `pocketstory-api/`, Docker Compose nên build từ context này:
 
 ```yaml
 services:
@@ -455,9 +520,9 @@ services:
       - pocketstory-api
 ```
 
-Lưu ý: nếu tên file JSON của bạn khác `firebase-service-account.json`, hãy sửa lại đường dẫn trong phần `volumes`.
+Nếu file service account của bạn có tên khác, sửa lại đường dẫn ở phần `volumes`.
 
-### 7.8. Chạy Docker Compose
+### 8.9. Chạy container
 
 ```bash
 cd ~/PocketStoryApp
@@ -465,20 +530,20 @@ sudo docker compose down
 sudo docker compose up -d --build
 ```
 
-Kiểm tra container:
+Kiểm tra:
 
 ```bash
 sudo docker ps
 ```
 
-Bạn cần thấy 2 container đang chạy:
+Cần thấy 2 container:
 
 ```txt
 pocketstory-api
 pocketstory-cloudflared
 ```
 
-Xem log backend:
+Xem log API:
 
 ```bash
 sudo docker logs -f pocketstory-api
@@ -492,9 +557,79 @@ sudo docker logs -f pocketstory-cloudflared
 
 ---
 
-## 8. Test API sau khi deploy
+## 9. Flow hoạt động
 
-### 8.1. Test local trên Ubuntu server
+### 9.1. Flow đăng nhập
+
+```txt
+User mở app
+  → đăng nhập email/password hoặc Google
+  → Firebase Authentication xác thực
+  → app lấy user hiện tại
+  → app tạo/cập nhật profile trong Firestore
+```
+
+### 9.2. Flow ghi nhận thu/chi
+
+```txt
+User nhập khoản thu/chi
+  → chọn loại income/expense
+  → nhập số tiền, danh mục, ghi chú, hình ảnh, ngày phát sinh
+  → app lưu vào users/{uid}/entries
+  → dashboard, nhật ký và báo cáo cập nhật theo dữ liệu mới
+```
+
+### 9.3. Flow ngân sách
+
+```txt
+User tạo ngân sách
+  → chọn danh mục
+  → nhập hạn mức theo VND
+  → app lưu vào users/{uid}/budgets
+  → app so sánh chi tiêu thực tế với hạn mức
+  → hiển thị progress và cảnh báo nếu sắp vượt/vượt ngân sách
+```
+
+Khi chỉnh sửa ngân sách:
+
+```txt
+User bấm icon edit ở budget
+  → dữ liệu được đưa lên form
+  → user sửa hạn mức hoặc danh mục
+  → app cập nhật lại budget trong Firestore
+```
+
+### 9.4. Flow chatbot AI
+
+```txt
+User hỏi chatbot
+  → Flutter lấy Firebase ID token
+  → Flutter gửi POST /api/chatbot/analyze
+  → Backend verify token bằng Firebase Admin SDK
+  → Backend lấy uid từ token
+  → Backend đọc users/{uid}/entries và users/{uid}/budgets
+  → Backend tóm tắt dữ liệu
+  → Backend gọi Gemini API
+  → Backend trả kết quả về Flutter
+  → App hiển thị câu trả lời
+```
+
+### 9.5. Flow Cloudflare Tunnel
+
+```txt
+Flutter app gọi https://chat.pocketstoryapp.io.vn
+  → Cloudflare nhận request
+  → Cloudflare Tunnel chuyển về cloudflared container
+  → cloudflared gọi http://pocketstory-api:3000
+  → Express API xử lý request
+  → response trả ngược về Flutter app
+```
+
+---
+
+## 10. Test API
+
+### 10.1. Test local trên Ubuntu Server
 
 ```bash
 curl http://localhost:3000/health
@@ -506,7 +641,7 @@ Kết quả đúng:
 {"status":"ok","service":"pocketstory-api"}
 ```
 
-### 8.2. Test qua domain Cloudflare
+### 10.2. Test qua domain Cloudflare
 
 ```bash
 curl https://chat.pocketstoryapp.io.vn/health
@@ -518,7 +653,7 @@ Kết quả đúng:
 {"status":"ok","service":"pocketstory-api"}
 ```
 
-### 8.3. Test endpoint chatbot khi chưa có Firebase token
+### 10.3. Test chatbot không có token
 
 ```bash
 curl -X POST https://chat.pocketstoryapp.io.vn/api/chatbot/analyze \
@@ -526,13 +661,13 @@ curl -X POST https://chat.pocketstoryapp.io.vn/api/chatbot/analyze \
   -d '{"question":"Phân tích chi tiêu của tôi trong 30 ngày gần đây","rangeDays":30}'
 ```
 
-Nếu nhận được lỗi sau thì backend vẫn đang hoạt động đúng, vì endpoint này yêu cầu Firebase ID token:
+Kết quả sau là bình thường vì endpoint chatbot yêu cầu Firebase ID token:
 
 ```json
 {"message":"Missing Firebase ID token."}
 ```
 
-### 8.4. Test endpoint chatbot với Firebase ID token
+### 10.4. Test chatbot có token
 
 ```bash
 curl -X POST https://chat.pocketstoryapp.io.vn/api/chatbot/analyze \
@@ -541,132 +676,52 @@ curl -X POST https://chat.pocketstoryapp.io.vn/api/chatbot/analyze \
   -d '{"question":"Phân tích chi tiêu của tôi trong 30 ngày gần đây","rangeDays":30}'
 ```
 
-Nếu token hợp lệ, backend sẽ đọc dữ liệu của user trong Firestore, gọi AI và trả về kết quả phân tích.
-
 ---
 
-## 9. Flow tổng thể của hệ thống
+## 11. Build APK
 
-### 9.1. Flow đăng nhập
-
-```txt
-Người dùng mở app
-  → đăng nhập bằng email/password hoặc Google
-  → Firebase Authentication xác thực
-  → app lấy thông tin user hiện tại
-  → dữ liệu user được lưu/cập nhật trong Firestore
-```
-
-### 9.2. Flow ghi nhận thu/chi
-
-```txt
-Người dùng nhập khoản thu/chi
-  → chọn loại giao dịch
-  → nhập số tiền, danh mục, ghi chú, ngày phát sinh
-  → có thể chọn hình ảnh
-  → app lưu dữ liệu vào Firestore theo users/{uid}/entries
-  → UI realtime cập nhật danh sách giao dịch và thống kê
-```
-
-### 9.3. Flow quản lý ngân sách
-
-```txt
-Người dùng tạo ngân sách
-  → chọn danh mục
-  → nhập hạn mức
-  → chọn khoảng thời gian
-  → app lưu vào users/{uid}/budgets
-  → hệ thống dùng dữ liệu này để so sánh với chi tiêu thực tế
-```
-
-### 9.4. Flow thống kê và báo cáo
-
-```txt
-App đọc entries và budgets từ Firestore
-  → tổng hợp tổng thu, tổng chi, số dư
-  → nhóm chi tiêu theo danh mục
-  → tính mức sử dụng ngân sách
-  → hiển thị biểu đồ và báo cáo cho người dùng
-```
-
-### 9.5. Flow chatbot AI
-
-```txt
-Người dùng hỏi chatbot trong Flutter app
-  → app lấy Firebase ID token từ user đang đăng nhập
-  → app gửi POST /api/chatbot/analyze
-  → backend verify token bằng Firebase Admin SDK
-  → backend lấy uid từ token
-  → backend đọc users/{uid}/entries và users/{uid}/budgets
-  → backend tóm tắt dữ liệu thu/chi
-  → backend gửi prompt đến Gemini API
-  → Gemini trả nội dung phân tích
-  → backend trả JSON về Flutter app
-  → app hiển thị câu trả lời trong màn hình chatbot
-```
-
-### 9.6. Flow deploy bằng Cloudflare Tunnel
-
-```txt
-Internet user
-  → truy cập https://chat.pocketstoryapp.io.vn
-  → Cloudflare nhận request
-  → Cloudflare Tunnel chuyển request về cloudflared container trên Ubuntu server
-  → cloudflared gọi http://pocketstory-api:3000
-  → Express backend xử lý request
-  → response quay lại Cloudflare
-  → response trả về Flutter app hoặc trình duyệt
-```
-
----
-
-## 10. Build và cập nhật server
-
-Khi code mới được merge vào `main`, cập nhật trên Ubuntu server:
+Build APK release:
 
 ```bash
-cd ~/PocketStoryApp
-git pull origin main
-sudo docker compose down
-sudo docker compose up -d --build
+flutter build apk --release --dart-define=POCKETSTORY_API_BASE_URL=https://chat.pocketstoryapp.io.vn
 ```
 
-Kiểm tra lại:
+File APK thường nằm ở:
 
-```bash
-sudo docker ps
-curl https://chat.pocketstoryapp.io.vn/health
+```txt
+build/app/outputs/flutter-apk/app-release.apk
 ```
 
 ---
 
-## 11. Các lỗi thường gặp
+## 12. Lỗi thường gặp
 
-### 11.1. Docker báo không tìm thấy file `.env`
+### 12.1. Thiếu file `.env`
 
-Lỗi ví dụ:
+Lỗi:
 
 ```txt
-env file .../pocketstory-api/.env not found
+env file ... not found
 ```
 
 Cách xử lý:
 
 ```bash
+nano .env
 nano pocketstory-api/.env
 ```
 
-Sau đó thêm đủ biến môi trường cho backend.
+Đảm bảo có đủ biến môi trường cho Docker Compose, Cloudflare Tunnel, Firebase và Gemini.
 
-### 11.2. Docker không pull được image do DNS
+### 12.2. Docker không pull được image do DNS
 
-Lỗi ví dụ:
+Lỗi:
 
 ```txt
 lookup registry-1.docker.io ... i/o timeout
 ```
 
-Có thể sửa DNS cho Docker:
+Có thể cấu hình DNS cho Docker:
 
 ```bash
 sudo mkdir -p /etc/docker
@@ -687,7 +742,7 @@ Restart Docker:
 sudo systemctl restart docker
 ```
 
-### 11.3. Backend báo thiếu Firebase credential
+### 12.3. Backend thiếu Firebase credential
 
 Lỗi thường gặp:
 
@@ -697,35 +752,35 @@ Failed to read credentials from file
 
 Cách xử lý:
 
-- Kiểm tra file Firebase Admin SDK JSON đã có trên Ubuntu server chưa.
-- Kiểm tra đường dẫn `GOOGLE_APPLICATION_CREDENTIALS` trong `.env`.
+- Kiểm tra file Firebase Admin SDK JSON có tồn tại trên Ubuntu server chưa.
+- Kiểm tra `GOOGLE_APPLICATION_CREDENTIALS`.
 - Kiểm tra phần `volumes` trong `docker-compose.yml`.
 
-### 11.4. Chatbot trả `Missing Firebase ID token`
+### 12.4. Chatbot báo `Missing Firebase ID token`
 
-Điều này là bình thường nếu gọi API bằng `curl` mà chưa truyền token.
+Điều này bình thường nếu gọi API bằng `curl` mà chưa truyền token.
 
-Endpoint chatbot bắt buộc có header:
+Cần thêm header:
 
 ```txt
 Authorization: Bearer FIREBASE_ID_TOKEN_CUA_USER
 ```
 
-Flutter app cần đăng nhập Firebase trước, sau đó lấy ID token và gửi kèm request.
+Flutter app sẽ tự lấy token từ user đã đăng nhập và gửi lên backend.
 
-### 11.5. Cloudflare Tunnel Healthy nhưng domain không chạy
+### 12.5. Cloudflare Tunnel Healthy nhưng domain không chạy
 
-Kiểm tra các điểm sau:
+Kiểm tra:
 
-- Public Hostname đã đúng domain chưa.
-- Service trong Cloudflare có đúng là `http://pocketstory-api:3000` không.
+- Public Hostname có đúng `chat.pocketstoryapp.io.vn` không.
+- Service có đúng `http://pocketstory-api:3000` không.
 - Container `pocketstory-api` có đang chạy không.
 - Container `pocketstory-cloudflared` có đang chạy không.
-- `curl http://localhost:3000/health` trên Ubuntu có trả `status: ok` không.
+- `curl http://localhost:3000/health` trên Ubuntu có OK không.
 
 ---
 
-## 12. Lưu ý bảo mật
+## 13. Bảo mật
 
 Không commit các file hoặc giá trị sau lên GitHub:
 
@@ -735,31 +790,21 @@ Không commit các file hoặc giá trị sau lên GitHub:
 - Cloudflare Tunnel token.
 - Private key hoặc credential cá nhân.
 
-Nếu lỡ public secret, cần revoke hoặc rotate secret ngay.
+Nếu lỡ public secret, cần rotate hoặc revoke secret ngay.
 
 ---
 
-## 13. Tóm tắt nhanh luồng chạy thật
+## Tóm tắt nhanh
 
 ```txt
 1. User đăng nhập Firebase trong Flutter app.
-2. User nhập dữ liệu thu/chi, ngân sách.
-3. Dữ liệu được lưu vào Firestore theo users/{uid}.
+2. User nhập thu/chi và ngân sách.
+3. Dữ liệu lưu trong Firestore theo users/{uid}.
 4. User hỏi chatbot.
 5. Flutter lấy Firebase ID token.
 6. Flutter gọi https://chat.pocketstoryapp.io.vn/api/chatbot/analyze.
-7. Cloudflare Tunnel chuyển request về Ubuntu server.
-8. Backend Node.js verify token và đọc dữ liệu Firestore.
-9. Backend gọi Gemini để phân tích.
-10. Flutter hiển thị câu trả lời cho user.
+7. Cloudflare Tunnel chuyển request về Ubuntu Server.
+8. Node.js backend verify token và đọc Firestore.
+9. Backend gọi Gemini API.
+10. Flutter hiển thị câu trả lời.
 ```
-
----
-
-## 14. Trạng thái triển khai đề xuất
-
-- Flutter app: chạy trên thiết bị người dùng.
-- Firebase: quản lý Auth, Firestore, Storage, Messaging.
-- Ubuntu Server: chạy `pocketstory-api` và `cloudflared` bằng Docker Compose.
-- Cloudflare Tunnel: public backend qua domain HTTPS mà không cần mở port router.
-- Domain chatbot: `https://chat.pocketstoryapp.io.vn`.
