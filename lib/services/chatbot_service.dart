@@ -40,26 +40,32 @@ class ChatbotService {
 
   static const String _configuredBaseUrl = String.fromEnvironment(
     'POCKETSTORY_API_BASE_URL',
-    defaultValue: 'https://authentication-sporting-temp-inquiry.trycloudflare.com',
+    defaultValue: 'https://chat.pocketstoryapp.io.vn',
   );
 
   final FirebaseAuth _auth;
   final http.Client _client;
   final String _baseUrl;
 
+  Future<String> getCurrentUserIdToken({bool forceRefresh = false}) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError('Bạn cần đăng nhập để lấy Firebase ID token.');
+    }
+
+    final idToken = await user.getIdToken(forceRefresh);
+    if (idToken == null || idToken.isEmpty) {
+      throw StateError('Không lấy được Firebase ID token của người dùng hiện tại.');
+    }
+
+    return idToken;
+  }
+
   Future<ChatbotAnalysis> analyzePersonalSpending({
     required String question,
     required int rangeDays,
   }) async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      throw StateError('Bạn cần đăng nhập để dùng chatbot phân tích chi tiêu.');
-    }
-
-    final idToken = await user.getIdToken();
-    if (idToken == null || idToken.isEmpty) {
-      throw StateError('Không lấy được Firebase ID token của người dùng hiện tại.');
-    }
+    final idToken = await getCurrentUserIdToken();
 
     final response = await _client.post(
       Uri.parse('$_baseUrl/api/chatbot/analyze'),
