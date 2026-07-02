@@ -10,6 +10,20 @@ class AuthService {
 
   User? get currentUser => _auth.currentUser;
 
+  Future<String> getCurrentUserIdToken({bool forceRefresh = false}) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw StateError('Bạn cần đăng nhập để lấy Firebase ID token.');
+    }
+
+    final idToken = await user.getIdToken(forceRefresh);
+    if (idToken == null || idToken.isEmpty) {
+      throw StateError('Không lấy được Firebase ID token của người dùng hiện tại.');
+    }
+
+    return idToken;
+  }
+
   Future<UserCredential> registerWithEmail({
     required String email,
     required String password,
