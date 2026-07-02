@@ -1,5 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../constants/app_categories.dart';
@@ -22,7 +24,10 @@ class BudgetScreen extends StatefulWidget {
 class _BudgetScreenState extends State<BudgetScreen> {
   final _amountController = TextEditingController();
   String _category = AppCategories.budget.first;
+  Budget? _editingBudget;
   bool _saving = false;
+
+  bool get _isEditing => _editingBudget != null;
 
   @override
   void dispose() {
@@ -30,12 +35,38 @@ class _BudgetScreenState extends State<BudgetScreen> {
     super.dispose();
   }
 
+  double? _parseVndAmount(String value) {
+    final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return null;
+    return double.tryParse(digits);
+  }
+
+  void _clearForm() {
+    setState(() {
+      _editingBudget = null;
+      _category = AppCategories.budget.first;
+      _amountController.clear();
+    });
+  }
+
+  void _startEditingBudget(Budget budget) {
+    setState(() {
+      _editingBudget = budget;
+      _category = budget.category;
+      _amountController.text = _VndInputFormatter.formatNumber(budget.limitAmount);
+    });
+  }
+
   Future<void> _saveBudget() async {
-    final limit = double.tryParse(_amountController.text.replaceAll(',', '').trim());
+    final limit = _parseVndAmount(_amountController.text);
     if (limit == null || limit <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nhập ngân sách hợp lệ.')));
       return;
     }
+
+    final repo = context.read<FinanceRepository>();
+    final editingBudget = _editingBudget;
+    final wasEditing = editingBudget != null;
 
     setState(() => _saving = true);
     final now = DateTime.now();
@@ -43,16 +74,24 @@ class _BudgetScreenState extends State<BudgetScreen> {
       id: AppDateUtils.monthBudgetId(_category, now),
       category: _category,
       limitAmount: limit,
-      periodStart: AppDateUtils.startOfMonth(now),
-      periodEnd: AppDateUtils.endOfMonth(now),
-      createdAt: DateTime.now(),
+      periodStart: editingBudget?.periodStart ?? AppDateUtils.startOfMonth(now),
+      periodEnd: editingBudget?.periodEnd ?? AppDateUtils.endOfMonth(now),
+      createdAt: editingBudget?.createdAt ?? DateTime.now(),
+      updatedAt: DateTime.now(),
     );
 
     try {
-      await context.read<FinanceRepository>().upsertBudget(widget.user.uid, budget);
-      _amountController.clear();
+      await repo.upsertBudget(widget.user.uid, budget);
+
+      if (editingBudget != null && editingBudget.id != budget.id) {
+        await repo.deleteBudget(widget.user.uid, editingBudget.id);
+      }
+
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã lưu ngân sách.')));
+      _clearForm();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(wasEditing ? 'Đã cập nhật ngân sách.' : 'Đã lưu ngân sách.')),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -71,27 +110,51 @@ class _BudgetScreenState extends State<BudgetScreen> {
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (_isEditing) ...[
+                  InputChip(
+                    avatar: const Icon(Icons.edit_rounded),
+                    label: Text('Đang chỉnh sửa: ${_editingBudget!.category}'),
+                    onDeleted: _saving ? null : _clearForm,
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 DropdownButtonFormField<String>(
                   value: _category,
                   decoration: const InputDecoration(labelText: 'Danh mục'),
                   items: AppCategories.budget.map((category) => DropdownMenuItem(value: category, child: Text(category))).toList(),
-                  onChanged: (value) => setState(() => _category = value ?? _category),
+                  onChanged: _saving ? null : (value) => setState(() => _category = value ?? _category),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _amountController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Hạn mức tháng này'),
+                  inputFormatters: const [_VndInputFormatter()],
+                  decoration: const InputDecoration(
+                    labelText: 'Hạn mức tháng này',
+                    hintText: 'Ví dụ: 1.000.000',
+                    suffixText: 'VND',
+                  ),
                 ),
                 const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _saving ? null : _saveBudget,
-                    icon: const Icon(Icons.savings_rounded),
-                    label: const Text('Lưu ngân sách'),
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _saving ? null : _saveBudget,
+                        icon: Icon(_isEditing ? Icons.check_rounded : Icons.savings_rounded),
+                        label: Text(_isEditing ? 'Cập nhật ngân sách' : 'Lưu ngân sách'),
+                      ),
+                    ),
+                    if (_isEditing) ...[
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: _saving ? null : _clearForm,
+                        child: const Text('Hủy'),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -135,6 +198,12 @@ class _BudgetScreenState extends State<BudgetScreen> {
                                   child: Text(budget.category, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
                                 ),
                                 IconButton(
+                                  tooltip: 'Chỉnh sửa ngân sách',
+                                  onPressed: () => _startEditingBudget(budget),
+                                  icon: const Icon(Icons.edit_outlined),
+                                ),
+                                IconButton(
+                                  tooltip: 'Xóa ngân sách',
                                   onPressed: () => repo.deleteBudget(widget.user.uid, budget.id),
                                   icon: const Icon(Icons.delete_outline_rounded),
                                 ),
@@ -159,6 +228,34 @@ class _BudgetScreenState extends State<BudgetScreen> {
           },
         ),
       ],
+    );
+  }
+}
+
+class _VndInputFormatter extends TextInputFormatter {
+  const _VndInputFormatter();
+
+  static final NumberFormat _formatter = NumberFormat.decimalPattern('vi_VN');
+
+  static String formatNumber(num value) => _formatter.format(value.round());
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) {
+      return const TextEditingValue();
+    }
+
+    final value = int.tryParse(digits);
+    if (value == null) return oldValue;
+
+    final formatted = _formatter.format(value);
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 }
