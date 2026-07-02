@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
+import '../services/theme_controller.dart';
 import 'alerts/alerts_screen.dart';
 import 'budget/budget_screen.dart';
 import 'chatbot/chatbot_screen.dart';
@@ -41,10 +42,23 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final themeController = context.watch<ThemeController>();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('PocketStory'),
         actions: [
+          IconButton(
+            tooltip: themeController.isDarkMode
+                ? 'Chuyển sang giao diện sáng'
+                : 'Chuyển sang giao diện tối',
+            onPressed: themeController.toggleTheme,
+            icon: Icon(
+              themeController.isDarkMode
+                  ? Icons.light_mode_rounded
+                  : Icons.dark_mode_rounded,
+            ),
+          ),
           IconButton(
             tooltip: 'Thông báo',
             onPressed: () {
