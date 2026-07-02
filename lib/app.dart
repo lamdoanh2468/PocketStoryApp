@@ -6,6 +6,7 @@ import 'screens/auth/auth_screen.dart';
 import 'screens/main_shell.dart';
 import 'services/auth_service.dart';
 import 'services/finance_repository.dart';
+import 'services/theme_controller.dart';
 import 'theme/app_theme.dart';
 
 class PocketStoryApp extends StatelessWidget {
@@ -17,12 +18,19 @@ class PocketStoryApp extends StatelessWidget {
       providers: [
         Provider<AuthService>(create: (_) => AuthService()),
         Provider<FinanceRepository>(create: (_) => FinanceRepository()),
+        ChangeNotifierProvider<ThemeController>(create: (_) => ThemeController()),
       ],
-      child: MaterialApp(
-        title: 'PocketStory',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.darkTheme,
-        home: const AuthGate(),
+      child: Consumer<ThemeController>(
+        builder: (context, themeController, _) {
+          return MaterialApp(
+            title: 'PocketStory',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: themeController.themeMode,
+            home: const AuthGate(),
+          );
+        },
       ),
     );
   }
