@@ -1,6 +1,6 @@
 # PocketStoryApp
 
-PocketStoryApp là ứng dụng quản lý tài chính cá nhân thông minh được xây dựng bằng Flutter, Firebase và Node.js. Ứng dụng giúp người dùng ghi lại thu nhập, khoản chi, ngân sách, xem báo cáo trực quan và hỏi chatbot AI để phân tích thói quen chi tiêu.
+PocketStoryApp là ứng dụng quản lý tài chính cá nhân thông minh được xây dựng bằng Flutter, Firebase và Node.js. Ứng dụng giúp người dùng ghi lại thu nhập, khoản chi, ngân sách, hình ảnh hóa đơn, xem báo cáo trực quan và hỏi chatbot AI để phân tích thói quen chi tiêu.
 
 Backend chatbot có thể chạy trên Ubuntu Server bằng Docker Compose và được public qua Cloudflare Tunnel tại domain dạng:
 
@@ -16,15 +16,16 @@ https://chat.pocketstoryapp.io.vn
 - [2. Công nghệ sử dụng](#2-công-nghệ-sử-dụng)
 - [3. Chức năng chính](#3-chức-năng-chính)
 - [4. Cấu trúc thư mục](#4-cấu-trúc-thư-mục)
-- [5. Cài đặt môi trường](#5-cài-đặt-môi-trường)
-- [6. Chạy Flutter app](#6-chạy-flutter-app)
-- [7. Chạy chatbot backend local](#7-chạy-chatbot-backend-local)
-- [8. Deploy backend bằng Ubuntu Server, Docker và Cloudflare Tunnel](#8-deploy-backend-bằng-ubuntu-server-docker-và-cloudflare-tunnel)
-- [9. Flow hoạt động](#9-flow-hoạt-động)
-- [10. Test API](#10-test-api)
-- [11. Build APK](#11-build-apk)
-- [12. Lỗi thường gặp](#12-lỗi-thường-gặp)
-- [13. Bảo mật](#13-bảo-mật)
+- [5. Cài đặt môi trường Flutter](#5-cài-đặt-môi-trường-flutter)
+- [6. Chạy Flutter app trên VS Code](#6-chạy-flutter-app-trên-vs-code)
+- [7. Lưu hình ảnh trên Cloudinary](#7-lưu-hình-ảnh-trên-cloudinary)
+- [8. Chạy chatbot backend local](#8-chạy-chatbot-backend-local)
+- [9. Deploy backend bằng Ubuntu Server, Docker và Cloudflare Tunnel](#9-deploy-backend-bằng-ubuntu-server-docker-và-cloudflare-tunnel)
+- [10. Flow hoạt động](#10-flow-hoạt-động)
+- [11. Test API](#11-test-api)
+- [12. Build APK](#12-build-apk)
+- [13. Lỗi thường gặp](#13-lỗi-thường-gặp)
+- [14. Bảo mật](#14-bảo-mật)
 
 ---
 
@@ -36,7 +37,7 @@ PocketStoryApp gồm 2 phần chính:
 Flutter mobile app
   ├─ Firebase Authentication
   ├─ Cloud Firestore
-  ├─ Firebase Storage
+  ├─ Cloudinary để lưu hình ảnh giao dịch/hóa đơn
   ├─ Firebase Messaging
   └─ Gọi PocketStory API để dùng chatbot AI
 
@@ -70,15 +71,22 @@ Internet / Flutter app
 - Firebase Core.
 - Firebase Authentication.
 - Cloud Firestore.
-- Firebase Storage.
 - Firebase Messaging.
 - Google Sign-In.
 - Provider.
 - HTTP.
 - Image Picker.
+- Cached Network Image.
 - FL Chart.
 - Intl.
 - Shared Preferences.
+
+### Lưu trữ hình ảnh
+
+- Cloudinary dùng để lưu ảnh giao dịch, hóa đơn hoặc ảnh minh chứng chi tiêu.
+- Flutter chọn ảnh bằng `image_picker`.
+- Flutter upload ảnh lên Cloudinary bằng HTTP request.
+- URL ảnh trả về từ Cloudinary được lưu vào Firestore trong document giao dịch.
 
 ### Backend chatbot
 
@@ -136,10 +144,16 @@ Người dùng có thể tạo giao dịch tài chính cá nhân với các thô
 - Hình ảnh liên quan.
 - Ngày phát sinh.
 
-Dữ liệu được lưu tại:
+Dữ liệu giao dịch được lưu tại:
 
 ```txt
 users/{uid}/entries/{entryId}
+```
+
+Nếu giao dịch có hình ảnh, app lưu URL ảnh Cloudinary vào field của giao dịch, ví dụ:
+
+```txt
+imageUrl: https://res.cloudinary.com/<cloud_name>/image/upload/...
 ```
 
 ### 3.3. Quản lý ngân sách
@@ -254,13 +268,12 @@ PocketStoryApp/
 ├── pubspec.yaml
 ├── firebase.json
 ├── firestore.rules
-├── storage.rules
 └── README.md
 ```
 
 ---
 
-## 5. Cài đặt môi trường
+## 5. Cài đặt môi trường Flutter
 
 ### 5.1. Công cụ cần có
 
@@ -269,68 +282,350 @@ Cài các công cụ sau trên máy phát triển:
 - Git.
 - Flutter SDK.
 - Android Studio hoặc VS Code.
+- Android SDK và Android Emulator nếu chạy máy ảo Android.
 - Firebase CLI nếu cần deploy rules/functions.
 - Node.js `>=20` nếu chạy backend local.
 - Docker và Docker Compose nếu deploy backend bằng container.
 
-Kiểm tra Flutter:
+### 5.2. Cài Flutter SDK trên Windows
+
+Tải Flutter SDK từ trang chính thức, giải nén vào một thư mục cố định, ví dụ:
+
+```txt
+C:\src\flutter
+```
+
+Thêm Flutter vào biến môi trường `Path`:
+
+```txt
+C:\src\flutter\bin
+```
+
+Sau đó mở PowerShell hoặc CMD mới và kiểm tra:
+
+```bash
+flutter --version
+flutter doctor
+```
+
+Nếu `flutter doctor` báo thiếu Android toolchain, mở Android Studio và cài:
+
+- Android SDK.
+- Android SDK Platform-Tools.
+- Android SDK Command-line Tools.
+- Android Emulator nếu muốn chạy máy ảo.
+
+Chấp nhận Android licenses:
+
+```bash
+flutter doctor --android-licenses
+```
+
+Kiểm tra lại:
 
 ```bash
 flutter doctor
 ```
 
-Kiểm tra Node.js:
+### 5.3. Cài extension trong VS Code
 
-```bash
-node -v
-npm -v
-```
+Mở VS Code và cài các extension sau:
 
-Kiểm tra Docker:
+- Flutter.
+- Dart.
 
-```bash
-docker --version
-docker compose version
-```
+Sau khi cài extension, VS Code có thể nhận Flutter project, gợi ý package, debug và chạy app trực tiếp.
 
-### 5.2. Clone repo
+### 5.4. Clone repo
 
 ```bash
 git clone https://github.com/lamdoanh2468/PocketStoryApp.git
 cd PocketStoryApp
 ```
 
-### 5.3. Cài dependencies Flutter
+Nếu repo private và clone bằng HTTPS bị lỗi password, dùng GitHub Personal Access Token hoặc đăng nhập GitHub CLI.
+
+### 5.5. Cài dependencies Flutter
 
 ```bash
 flutter pub get
 ```
 
+Nếu package bị lỗi cache, có thể chạy:
+
+```bash
+flutter clean
+flutter pub get
+```
+
 ---
 
-## 6. Chạy Flutter app
+## 6. Chạy Flutter app trên VS Code
 
-Chạy app ở môi trường local:
+### 6.1. Mở project
+
+Mở VS Code tại thư mục gốc của project:
+
+```bash
+code .
+```
+
+Hoặc mở VS Code thủ công rồi chọn:
+
+```txt
+File → Open Folder → PocketStoryApp
+```
+
+### 6.2. Chọn thiết bị chạy app
+
+Ở góc dưới bên phải VS Code, chọn thiết bị chạy Flutter:
+
+- Android Emulator.
+- Điện thoại Android thật đã bật USB Debugging.
+- Chrome nếu project có hỗ trợ web.
+
+Có thể kiểm tra thiết bị bằng terminal:
+
+```bash
+flutter devices
+```
+
+### 6.3. Chạy app bằng terminal
+
+Chạy app local:
 
 ```bash
 flutter run
 ```
 
-Mặc định app có thể gọi backend chatbot theo URL đã cấu hình trong code. Nếu muốn ép app gọi domain production, chạy:
+Nếu muốn app gọi backend production:
 
 ```bash
 flutter run --dart-define=POCKETSTORY_API_BASE_URL=https://chat.pocketstoryapp.io.vn
 ```
 
-Khi build release cũng nên truyền URL backend:
+### 6.4. Chạy app bằng nút Run của VS Code
 
-```bash
-flutter build apk --release --dart-define=POCKETSTORY_API_BASE_URL=https://chat.pocketstoryapp.io.vn
+Trong VS Code:
+
+```txt
+Run and Debug → Start Debugging
 ```
+
+Hoặc bấm phím:
+
+```txt
+F5
+```
+
+Nếu VS Code hỏi environment, chọn Flutter/Dart.
+
+### 6.5. Hot reload và hot restart
+
+Khi app đang chạy:
+
+```txt
+r  → hot reload
+R  → hot restart
+q  → thoát app đang chạy
+```
+
+Trong VS Code cũng có thể bấm icon Hot Reload hoặc Hot Restart ở thanh debug.
 
 ---
 
-## 7. Chạy chatbot backend local
+## 7. Lưu hình ảnh trên Cloudinary
+
+### 7.1. Mục đích
+
+PocketStoryApp có chức năng ghi nhận khoản chi bằng số tiền, hình ảnh và ghi chú. Hình ảnh như hóa đơn, ảnh sản phẩm hoặc ảnh minh chứng chi tiêu có thể được lưu trên Cloudinary thay vì lưu trực tiếp trong Firestore.
+
+Cách lưu đúng là:
+
+```txt
+Flutter chọn ảnh từ máy
+  → upload ảnh lên Cloudinary
+  → Cloudinary trả về secure_url
+  → Flutter lưu secure_url vào Firestore trong users/{uid}/entries/{entryId}
+  → App dùng URL đó để hiển thị lại ảnh
+```
+
+Không nên lưu binary/base64 ảnh trực tiếp vào Firestore vì document sẽ nặng, khó quản lý và tốn dung lượng đọc/ghi.
+
+### 7.2. Tạo Cloudinary account
+
+Vào Cloudinary Dashboard và lấy các thông tin sau:
+
+```txt
+Cloud name
+API Key
+API Secret
+Upload preset
+```
+
+Với Flutter mobile app, cách đơn giản nhất là dùng unsigned upload preset.
+
+Trong Cloudinary Dashboard:
+
+```txt
+Settings → Upload → Upload presets → Add upload preset
+```
+
+Cấu hình gợi ý:
+
+```txt
+Signing Mode: Unsigned
+Folder: pocketstory/entries
+Allowed formats: jpg, jpeg, png, webp
+```
+
+Sau khi tạo xong, ghi lại:
+
+```txt
+cloud_name
+upload_preset
+```
+
+### 7.3. Cấu hình biến khi chạy Flutter
+
+Không hard-code `cloud_name` và `upload_preset` trực tiếp trong code nếu repo public. Có thể truyền bằng `--dart-define`:
+
+```bash
+flutter run \
+  --dart-define=POCKETSTORY_API_BASE_URL=https://chat.pocketstoryapp.io.vn \
+  --dart-define=CLOUDINARY_CLOUD_NAME=your_cloud_name \
+  --dart-define=CLOUDINARY_UPLOAD_PRESET=your_unsigned_upload_preset
+```
+
+Khi build APK:
+
+```bash
+flutter build apk --release \
+  --dart-define=POCKETSTORY_API_BASE_URL=https://chat.pocketstoryapp.io.vn \
+  --dart-define=CLOUDINARY_CLOUD_NAME=your_cloud_name \
+  --dart-define=CLOUDINARY_UPLOAD_PRESET=your_unsigned_upload_preset
+```
+
+Trong Flutter có thể đọc bằng:
+
+```dart
+const cloudName = String.fromEnvironment('CLOUDINARY_CLOUD_NAME');
+const uploadPreset = String.fromEnvironment('CLOUDINARY_UPLOAD_PRESET');
+```
+
+### 7.4. Package đang dùng
+
+Project hiện đã có các package phù hợp để chọn và upload ảnh:
+
+```yaml
+image_picker: ^1.1.2
+http: ^1.2.2
+cached_network_image: ^3.4.1
+```
+
+Ý nghĩa:
+
+- `image_picker`: chọn ảnh từ thư viện hoặc camera.
+- `http`: gửi request upload ảnh lên Cloudinary.
+- `cached_network_image`: hiển thị ảnh từ URL và cache ảnh để app mượt hơn.
+
+### 7.5. Ví dụ service upload ảnh lên Cloudinary
+
+Có thể tạo file:
+
+```txt
+lib/services/cloudinary_service.dart
+```
+
+Ví dụ code:
+
+```dart
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:http/http.dart' as http;
+
+class CloudinaryService {
+  CloudinaryService({
+    required this.cloudName,
+    required this.uploadPreset,
+    http.Client? client,
+  }) : _client = client ?? http.Client();
+
+  final String cloudName;
+  final String uploadPreset;
+  final http.Client _client;
+
+  Future<String> uploadImage(File imageFile) async {
+    if (cloudName.isEmpty || uploadPreset.isEmpty) {
+      throw Exception('Missing Cloudinary configuration.');
+    }
+
+    final uri = Uri.parse(
+      'https://api.cloudinary.com/v1_1/$cloudName/image/upload',
+    );
+
+    final request = http.MultipartRequest('POST', uri)
+      ..fields['upload_preset'] = uploadPreset
+      ..files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+
+    final streamedResponse = await _client.send(request);
+    final response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Upload image failed: ${response.body}');
+    }
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final secureUrl = data['secure_url'] as String?;
+
+    if (secureUrl == null || secureUrl.isEmpty) {
+      throw Exception('Cloudinary response missing secure_url.');
+    }
+
+    return secureUrl;
+  }
+}
+```
+
+### 7.6. Lưu URL ảnh vào Firestore
+
+Sau khi upload thành công, lấy `secure_url` và lưu vào document giao dịch:
+
+```txt
+users/{uid}/entries/{entryId}
+```
+
+Ví dụ dữ liệu:
+
+```json
+{
+  "type": "expense",
+  "amount": 50000,
+  "category": "Ăn uống",
+  "note": "Ăn trưa",
+  "imageUrl": "https://res.cloudinary.com/your_cloud_name/image/upload/.../receipt.jpg",
+  "createdAt": "Timestamp"
+}
+```
+
+Khi hiển thị lại ảnh trong app, dùng `CachedNetworkImage` hoặc `Image.network` với `imageUrl` đã lưu.
+
+### 7.7. Lưu ý bảo mật Cloudinary
+
+Không commit các thông tin sau lên GitHub:
+
+```txt
+API Secret
+.env
+file cấu hình có secret thật
+```
+
+Nếu upload trực tiếp từ Flutter bằng unsigned preset, chỉ nên giới hạn preset theo folder, định dạng ảnh và dung lượng ảnh. Với app production, có thể chuyển sang signed upload thông qua backend để bảo mật tốt hơn.
+
+---
+
+## 8. Chạy chatbot backend local
 
 Vào thư mục API:
 
@@ -384,9 +679,9 @@ Kết quả đúng:
 
 ---
 
-## 8. Deploy backend bằng Ubuntu Server, Docker và Cloudflare Tunnel
+## 9. Deploy backend bằng Ubuntu Server, Docker và Cloudflare Tunnel
 
-### 8.1. Luồng deploy tổng quát
+### 9.1. Luồng deploy tổng quát
 
 ```txt
 Ubuntu Server
@@ -400,7 +695,7 @@ Ubuntu Server
   → chạy docker compose up -d --build
 ```
 
-### 8.2. Cài Docker trên Ubuntu
+### 9.2. Cài Docker trên Ubuntu
 
 ```bash
 sudo apt update
@@ -408,14 +703,14 @@ sudo apt install -y git docker.io docker-compose-plugin
 sudo systemctl enable --now docker
 ```
 
-### 8.3. Clone repo trên server
+### 9.3. Clone repo trên server
 
 ```bash
 git clone https://github.com/lamdoanh2468/PocketStoryApp.git
 cd PocketStoryApp
 ```
 
-### 8.4. Tạo file `.env` ở root project
+### 9.4. Tạo file `.env` ở root project
 
 File này dùng cho Docker Compose và Cloudflare Tunnel.
 
@@ -430,7 +725,7 @@ APP_PORT=3000
 CLOUDFLARE_TUNNEL_TOKEN=PASTE_CLOUDFLARE_TUNNEL_TOKEN_HERE
 ```
 
-### 8.5. Tạo file `.env` cho backend API
+### 9.5. Tạo file `.env` cho backend API
 
 ```bash
 nano pocketstory-api/.env
@@ -450,7 +745,7 @@ GEMINI_API_KEY=PASTE_GEMINI_API_KEY_HERE
 GEMINI_MODEL=gemini-1.5-flash
 ```
 
-### 8.6. Copy Firebase Admin SDK JSON vào server
+### 9.6. Copy Firebase Admin SDK JSON vào server
 
 Ví dụ đặt file tại:
 
@@ -470,7 +765,7 @@ Kiểm tra:
 ls -la pocketstory-api/*.json
 ```
 
-### 8.7. Cấu hình Cloudflare Tunnel
+### 9.7. Cấu hình Cloudflare Tunnel
 
 Trong Cloudflare Zero Trust, tạo tunnel và thêm Public Hostname:
 
@@ -488,7 +783,7 @@ https://chat.pocketstoryapp.io.vn → http://pocketstory-api:3000
 
 `pocketstory-api` là tên service/container trong Docker Compose. Vì `cloudflared` và `pocketstory-api` chạy chung Docker network, Cloudflare Tunnel có thể gọi API qua service name này.
 
-### 8.8. Docker Compose khuyến nghị
+### 9.8. Docker Compose khuyến nghị
 
 Vì Node.js backend nằm trong thư mục `pocketstory-api/`, Docker Compose nên build từ context này:
 
@@ -522,7 +817,7 @@ services:
 
 Nếu file service account của bạn có tên khác, sửa lại đường dẫn ở phần `volumes`.
 
-### 8.9. Chạy container
+### 9.9. Chạy container
 
 ```bash
 cd ~/PocketStoryApp
@@ -557,9 +852,9 @@ sudo docker logs -f pocketstory-cloudflared
 
 ---
 
-## 9. Flow hoạt động
+## 10. Flow hoạt động
 
-### 9.1. Flow đăng nhập
+### 10.1. Flow đăng nhập
 
 ```txt
 User mở app
@@ -569,17 +864,20 @@ User mở app
   → app tạo/cập nhật profile trong Firestore
 ```
 
-### 9.2. Flow ghi nhận thu/chi
+### 10.2. Flow ghi nhận thu/chi có hình ảnh
 
 ```txt
 User nhập khoản thu/chi
   → chọn loại income/expense
-  → nhập số tiền, danh mục, ghi chú, hình ảnh, ngày phát sinh
-  → app lưu vào users/{uid}/entries
+  → nhập số tiền, danh mục, ghi chú, ngày phát sinh
+  → chọn hình ảnh từ thư viện hoặc camera
+  → Flutter upload ảnh lên Cloudinary
+  → Cloudinary trả về secure_url
+  → Flutter lưu giao dịch vào users/{uid}/entries kèm imageUrl
   → dashboard, nhật ký và báo cáo cập nhật theo dữ liệu mới
 ```
 
-### 9.3. Flow ngân sách
+### 10.3. Flow ngân sách
 
 ```txt
 User tạo ngân sách
@@ -599,7 +897,7 @@ User bấm icon edit ở budget
   → app cập nhật lại budget trong Firestore
 ```
 
-### 9.4. Flow chatbot AI
+### 10.4. Flow chatbot AI
 
 ```txt
 User hỏi chatbot
@@ -614,7 +912,7 @@ User hỏi chatbot
   → App hiển thị câu trả lời
 ```
 
-### 9.5. Flow Cloudflare Tunnel
+### 10.5. Flow Cloudflare Tunnel
 
 ```txt
 Flutter app gọi https://chat.pocketstoryapp.io.vn
@@ -627,9 +925,9 @@ Flutter app gọi https://chat.pocketstoryapp.io.vn
 
 ---
 
-## 10. Test API
+## 11. Test API
 
-### 10.1. Test local trên Ubuntu Server
+### 11.1. Test local trên Ubuntu Server
 
 ```bash
 curl http://localhost:3000/health
@@ -641,7 +939,7 @@ Kết quả đúng:
 {"status":"ok","service":"pocketstory-api"}
 ```
 
-### 10.2. Test qua domain Cloudflare
+### 11.2. Test qua domain Cloudflare
 
 ```bash
 curl https://chat.pocketstoryapp.io.vn/health
@@ -653,7 +951,7 @@ Kết quả đúng:
 {"status":"ok","service":"pocketstory-api"}
 ```
 
-### 10.3. Test chatbot không có token
+### 11.3. Test chatbot không có token
 
 ```bash
 curl -X POST https://chat.pocketstoryapp.io.vn/api/chatbot/analyze \
@@ -667,7 +965,7 @@ Kết quả sau là bình thường vì endpoint chatbot yêu cầu Firebase ID 
 {"message":"Missing Firebase ID token."}
 ```
 
-### 10.4. Test chatbot có token
+### 11.4. Test chatbot có token
 
 ```bash
 curl -X POST https://chat.pocketstoryapp.io.vn/api/chatbot/analyze \
@@ -678,12 +976,15 @@ curl -X POST https://chat.pocketstoryapp.io.vn/api/chatbot/analyze \
 
 ---
 
-## 11. Build APK
+## 12. Build APK
 
 Build APK release:
 
 ```bash
-flutter build apk --release --dart-define=POCKETSTORY_API_BASE_URL=https://chat.pocketstoryapp.io.vn
+flutter build apk --release \
+  --dart-define=POCKETSTORY_API_BASE_URL=https://chat.pocketstoryapp.io.vn \
+  --dart-define=CLOUDINARY_CLOUD_NAME=your_cloud_name \
+  --dart-define=CLOUDINARY_UPLOAD_PRESET=your_unsigned_upload_preset
 ```
 
 File APK thường nằm ở:
@@ -694,9 +995,63 @@ build/app/outputs/flutter-apk/app-release.apk
 
 ---
 
-## 12. Lỗi thường gặp
+## 13. Lỗi thường gặp
 
-### 12.1. Thiếu file `.env`
+### 13.1. Flutter không nhận lệnh `flutter`
+
+Lỗi:
+
+```txt
+'flutter' is not recognized as an internal or external command
+```
+
+Cách xử lý:
+
+- Kiểm tra đã thêm `C:\src\flutter\bin` vào `Path` chưa.
+- Đóng terminal cũ và mở terminal mới.
+- Chạy lại `flutter --version`.
+
+### 13.2. Thiếu Android SDK hoặc license
+
+Chạy:
+
+```bash
+flutter doctor
+```
+
+Nếu báo thiếu Android license:
+
+```bash
+flutter doctor --android-licenses
+```
+
+Sau đó chạy lại:
+
+```bash
+flutter doctor
+```
+
+### 13.3. Không thấy thiết bị trong VS Code
+
+Kiểm tra:
+
+```bash
+flutter devices
+```
+
+Nếu dùng điện thoại thật:
+
+- Bật Developer Options.
+- Bật USB Debugging.
+- Chọn Allow khi điện thoại hỏi quyền debug.
+
+Nếu dùng emulator:
+
+- Mở Android Studio.
+- Vào Device Manager.
+- Start Android Emulator.
+
+### 13.4. Thiếu file `.env`
 
 Lỗi:
 
@@ -713,7 +1068,7 @@ nano pocketstory-api/.env
 
 Đảm bảo có đủ biến môi trường cho Docker Compose, Cloudflare Tunnel, Firebase và Gemini.
 
-### 12.2. Docker không pull được image do DNS
+### 13.5. Docker không pull được image do DNS
 
 Lỗi:
 
@@ -742,7 +1097,7 @@ Restart Docker:
 sudo systemctl restart docker
 ```
 
-### 12.3. Backend thiếu Firebase credential
+### 13.6. Backend thiếu Firebase credential
 
 Lỗi thường gặp:
 
@@ -756,7 +1111,7 @@ Cách xử lý:
 - Kiểm tra `GOOGLE_APPLICATION_CREDENTIALS`.
 - Kiểm tra phần `volumes` trong `docker-compose.yml`.
 
-### 12.4. Chatbot báo `Missing Firebase ID token`
+### 13.7. Chatbot báo `Missing Firebase ID token`
 
 Điều này bình thường nếu gọi API bằng `curl` mà chưa truyền token.
 
@@ -768,7 +1123,15 @@ Authorization: Bearer FIREBASE_ID_TOKEN_CUA_USER
 
 Flutter app sẽ tự lấy token từ user đã đăng nhập và gửi lên backend.
 
-### 12.5. Cloudflare Tunnel Healthy nhưng domain không chạy
+### 13.8. Cloudinary upload lỗi `Invalid upload preset`
+
+Kiểm tra:
+
+- Upload preset có đúng tên không.
+- Preset có đang để `Unsigned` không.
+- `CLOUDINARY_CLOUD_NAME` có đúng Cloud name không.
+
+### 13.9. Cloudflare Tunnel Healthy nhưng domain không chạy
 
 Kiểm tra:
 
@@ -780,7 +1143,7 @@ Kiểm tra:
 
 ---
 
-## 13. Bảo mật
+## 14. Bảo mật
 
 Không commit các file hoặc giá trị sau lên GitHub:
 
@@ -788,6 +1151,7 @@ Không commit các file hoặc giá trị sau lên GitHub:
 - Firebase Admin SDK JSON.
 - Gemini API key.
 - Cloudflare Tunnel token.
+- Cloudinary API Secret.
 - Private key hoặc credential cá nhân.
 
 Nếu lỡ public secret, cần rotate hoặc revoke secret ngay.
@@ -798,13 +1162,14 @@ Nếu lỡ public secret, cần rotate hoặc revoke secret ngay.
 
 ```txt
 1. User đăng nhập Firebase trong Flutter app.
-2. User nhập thu/chi và ngân sách.
-3. Dữ liệu lưu trong Firestore theo users/{uid}.
-4. User hỏi chatbot.
-5. Flutter lấy Firebase ID token.
-6. Flutter gọi https://chat.pocketstoryapp.io.vn/api/chatbot/analyze.
-7. Cloudflare Tunnel chuyển request về Ubuntu Server.
-8. Node.js backend verify token và đọc Firestore.
-9. Backend gọi Gemini API.
-10. Flutter hiển thị câu trả lời.
+2. User nhập thu/chi, ngân sách và có thể chọn ảnh hóa đơn.
+3. Ảnh được upload lên Cloudinary.
+4. URL ảnh Cloudinary được lưu vào Firestore theo users/{uid}/entries/{entryId}.
+5. User hỏi chatbot.
+6. Flutter lấy Firebase ID token.
+7. Flutter gọi https://chat.pocketstoryapp.io.vn/api/chatbot/analyze.
+8. Cloudflare Tunnel chuyển request về Ubuntu Server.
+9. Node.js backend verify token và đọc Firestore.
+10. Backend gọi Gemini API.
+11. Flutter hiển thị câu trả lời.
 ```
