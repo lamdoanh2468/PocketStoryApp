@@ -100,8 +100,35 @@ class NotificationService {
 
     if (title == null && body == null) return;
 
+    await _showLocalNotification(
+      id: message.hashCode,
+      title: title,
+      body: body,
+      data: message.data,
+    );
+  }
+
+  Future<void> showBudgetAlert({
+    required String title,
+    required String body,
+    Map<String, dynamic> data = const <String, dynamic>{},
+  }) async {
+    await _showLocalNotification(
+      id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title: title,
+      body: body,
+      data: data,
+    );
+  }
+
+  Future<void> _showLocalNotification({
+    required int id,
+    required String? title,
+    required String? body,
+    required Map<String, dynamic> data,
+  }) async {
     await _localNotifications.show(
-      message.hashCode,
+      id,
       title,
       body,
       NotificationDetails(
@@ -114,7 +141,7 @@ class NotificationService {
         ),
         iOS: const DarwinNotificationDetails(),
       ),
-      payload: jsonEncode(message.data),
+      payload: jsonEncode(data),
     );
   }
 
